@@ -79,14 +79,29 @@ async function handleVideo(ctx) {
       throw new Error('OUTPUT_TOO_LARGE');
     }
 
-    // Send video note
+    // Send video note (with fallback to regular video)
     log(`Sending video note for session ${sessionId}`);
-    await ctx.replyWithVideoNote({ source: outputPath });
+
+    try {
+      await ctx.replyWithVideoNote({ source: outputPath });
+      log(`Successfully sent video note for session ${sessionId}`);
+    } catch (sendError) {
+      // Fallback to regular video if video note fails (e.g., VOICE_MESSAGES_FORBIDDEN)
+      if (sendError.message.includes('VOICE_MESSAGES_FORBIDDEN') ||
+          sendError.message.includes('Bad Request')) {
+        log(`Video note blocked, sending as regular video for session ${sessionId}`);
+        await ctx.replyWithVideo(
+          { source: outputPath },
+          { caption: '⚠️ Video note blocked by privacy settings. Sending as regular video.\n\nTo receive circles, enable: Settings → Privacy → Voice Messages → Everybody' }
+        );
+        log(`Successfully sent regular video for session ${sessionId}`);
+      } else {
+        throw sendError;
+      }
+    }
 
     // Delete processing message
     await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
-
-    log(`Successfully processed video for session ${sessionId}`);
 
   } catch (error) {
     log(`Error processing video: ${error.message}`, 'error');
