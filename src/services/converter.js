@@ -3,39 +3,46 @@ const fs = require('fs');
 const { log } = require('../utils/logger');
 const { LIMITS } = require('../utils/validators');
 
+// Compression levels - progressively more aggressive
+const COMPRESSION_LEVELS = [
+  { size: 384, crf: 28, preset: 'fast' },
+  { size: 320, crf: 32, preset: 'medium' },
+  { size: 256, crf: 35, preset: 'medium' },
+  { size: 240, crf: 38, preset: 'slow' },
+];
+
 /**
  * Convert video to Telegram video note format
- * - Square aspect ratio (384x384)
+ * - Square aspect ratio
  * - H.264 codec
  * - Max 60 seconds
  * - No audio
- * - Max 8 MB output
+ * - Auto-compress to fit under 8 MB
  */
-async function convertToVideoNote(inputPath, outputPath, options = {}) {
-  const {
-    size = 384,
-    maxDuration = 60,
-    crf = 28,
-    preset = 'fast'
-  } = options;
+async function convertToVideoNote(inputPath, outputPath, levelIndex = 0) {
+  const maxDuration = 60;
+  const level = COMPRESSION_LEVELS[levelIndex];
+
+  if (!level) {
+    throw new Error('OUTPUT_TOO_LARGE');
+  }
+
+  log(`Trying compression level ${levelIndex + 1}/${COMPRESSION_LEVELS.length}: ${level.size}px, CRF ${level.crf}`);
 
   return new Promise((resolve, reject) => {
-    // Build video filter for cropping and scaling
-    // crop=min(iw,ih):min(iw,ih):(iw-min(iw,ih))/2:(ih-min(iw,ih))/2
-    // This crops to square, centered
     const cropFilter = 'crop=min(iw\\,ih):min(iw\\,ih):(iw-min(iw\\,ih))/2:(ih-min(iw\\,ih))/2';
-    const scaleFilter = `scale=${size}:${size}`;
+    const scaleFilter = `scale=${level.size}:${level.size}`;
 
     ffmpeg(inputPath)
       .videoFilters([cropFilter, scaleFilter])
       .outputOptions([
         '-c:v libx264',
-        `-preset ${preset}`,
-        `-crf ${crf}`,
+        `-preset ${level.preset}`,
+        `-crf ${level.crf}`,
         `-t ${maxDuration}`,
-        '-an',                    // No audio
-        '-movflags +faststart',   // Web optimization
-        '-pix_fmt yuv420p'        // Compatibility
+        '-an',
+        '-movflags +faststart',
+        '-pix_fmt yuv420p'
       ])
       .on('start', (command) => {
         log(`FFmpeg started: ${command}`);
@@ -52,24 +59,21 @@ async function convertToVideoNote(inputPath, outputPath, options = {}) {
       .on('end', async () => {
         log('FFmpeg conversion completed');
 
-        // Check output file size
         try {
           const stats = fs.statSync(outputPath);
+          const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+          log(`Output size: ${sizeMB} MB`);
 
           if (stats.size > LIMITS.MAX_OUTPUT_SIZE) {
-            log(`Output too large (${stats.size} bytes), retrying with lower quality...`);
-
-            // Retry with lower quality
+            log(`Output too large, trying next compression level...`);
             fs.unlinkSync(outputPath);
-            await convertToVideoNote(inputPath, outputPath, {
-              size: 240,
-              maxDuration,
-              crf: 35,
-              preset: 'medium'
-            });
-          }
 
-          resolve(outputPath);
+            // Try next compression level
+            const result = await convertToVideoNote(inputPath, outputPath, levelIndex + 1);
+            resolve(result);
+          } else {
+            resolve(outputPath);
+          }
         } catch (err) {
           reject(err);
         }

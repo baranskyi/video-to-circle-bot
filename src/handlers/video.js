@@ -7,12 +7,12 @@ const { validateVideo, LIMITS } = require('../utils/validators');
 const { log } = require('../utils/logger');
 
 const ERROR_MESSAGES = {
-  FILE_TOO_LARGE: `File too large. Maximum size is ${LIMITS.MAX_FILE_SIZE / 1024 / 1024} MB.`,
-  CONVERSION_FAILED: 'Failed to convert video. Please try a different video.',
-  OUTPUT_TOO_LARGE: 'Output file is too large. Please try a shorter video.',
-  DOWNLOAD_FAILED: 'Failed to download video. Please try again.',
-  UNEXPECTED: 'Something went wrong. Please try again later.',
-  NO_VIDEO: 'Please send a video file.',
+  FILE_TOO_LARGE: '⚠️ File is too large for Telegram Bot API (max 20 MB).\n\nTip: Send video as "video" (not as file) - Telegram will compress it automatically.',
+  CONVERSION_FAILED: '❌ Failed to convert video. Please try a different video.',
+  OUTPUT_TOO_LARGE: '❌ Could not compress video enough. Please try a shorter video.',
+  DOWNLOAD_FAILED: '❌ Failed to download video. Please try again.',
+  UNEXPECTED: '❌ Something went wrong. Please try again later.',
+  NO_VIDEO: '📹 Please send a video file.',
 };
 
 async function handleVideo(ctx) {
@@ -110,6 +110,9 @@ async function handleVideo(ctx) {
     let userMessage = ERROR_MESSAGES.UNEXPECTED;
     if (error.message in ERROR_MESSAGES) {
       userMessage = ERROR_MESSAGES[error.message];
+    } else if (error.message.includes('file is too big') ||
+               error.message.includes('File is too big')) {
+      userMessage = ERROR_MESSAGES.FILE_TOO_LARGE;
     } else if (error.message.includes('FFmpeg')) {
       userMessage = ERROR_MESSAGES.CONVERSION_FAILED;
     }

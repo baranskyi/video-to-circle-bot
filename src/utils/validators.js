@@ -7,20 +7,15 @@ const LIMITS = {
 
 /**
  * Validate video before processing
+ * Note: We don't check file size here - Telegram API will handle it
+ * If file is too large, download will fail and we handle it gracefully
  */
 function validateVideo(fileSize, duration = null) {
-  const errors = [];
-
-  if (fileSize > LIMITS.MAX_FILE_SIZE) {
-    errors.push(`File too large. Maximum size is ${LIMITS.MAX_FILE_SIZE / 1024 / 1024} MB.`);
-  }
-
-  // Duration validation is informational only
-  // (we'll trim the video anyway)
-
+  // Always valid - let Telegram API handle size limits
+  // This way user doesn't see scary error messages
   return {
-    valid: errors.length === 0,
-    errors
+    valid: true,
+    errors: []
   };
 }
 
