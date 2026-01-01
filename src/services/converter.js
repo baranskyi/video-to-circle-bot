@@ -14,9 +14,8 @@ const COMPRESSION_LEVELS = [
 /**
  * Convert video to Telegram video note format
  * - Square aspect ratio
- * - H.264 codec
+ * - H.264 codec + AAC audio
  * - Max 60 seconds
- * - No audio
  * - Auto-compress to fit under 8 MB
  */
 async function convertToVideoNote(inputPath, outputPath, levelIndex = 0) {
@@ -40,7 +39,8 @@ async function convertToVideoNote(inputPath, outputPath, levelIndex = 0) {
         `-preset ${level.preset}`,
         `-crf ${level.crf}`,
         `-t ${maxDuration}`,
-        '-an',
+        '-c:a aac',
+        '-b:a 128k',
         '-movflags +faststart',
         '-pix_fmt yuv420p'
       ])
